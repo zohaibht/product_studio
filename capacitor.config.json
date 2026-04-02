@@ -1,0 +1,6 @@
+{
+  "appId": "com.zohaib.productstudio",
+  "appName": "Product Studio",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}
