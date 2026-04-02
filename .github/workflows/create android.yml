@@ -22,21 +22,18 @@ jobs:
         run: npm install
 
       - name: Build React App (Vite)
-        # Vite build ke waqt secrets ko environment variables mein pass karna zaroori hai
         run: npm run build
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           API_KEY: ${{ secrets.API_KEY }}
 
       - name: Setup Java (JDK 21)
-        # Java 21 naye Capacitor/Android versions ke liye lazmi hai
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '21'
 
       - name: Setup and Sync Capacitor
-        # Is step mein hum Capacitor CLI install kar ke fresh android folder banatay hain
         run: |
           npm install @capacitor/core @capacitor/cli @capacitor/android
           rm -rf android
@@ -44,15 +41,21 @@ jobs:
           npx cap add android
           npx cap sync android
 
+      - name: Fix Kotlin Duplicate Classes
+        # Yeh command build.gradle mein duplicate libraries ko exclude kar degi
+        run: |
+          echo "configurations.all {
+              exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
+              exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
+          }" >> android/app/build.gradle
+
       - name: Build APK with Gradle
-        # Gradle ko execution permission dena aur debug APK banana
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
 
       - name: Upload APK to Artifacts
-        # Build khatam hone ke baad APK ko download ke liye available karna
         uses: actions/upload-artifact@v4
         with:
           name: Lumina-Studio-APK
