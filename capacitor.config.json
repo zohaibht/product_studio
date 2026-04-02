@@ -1,6 +1,9 @@
+
 {
-  "appId": "com.zohaib.productstudio",
-  "appName": "Product Studio",
+  "appId": "com.yourdomain.appname",
+  "appName": "YourAppName",
   "webDir": "dist",
-  "bundledWebRuntime": false
+  "server": {
+    "androidScheme": "https"
+  }
 }
