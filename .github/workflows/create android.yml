@@ -3,6 +3,8 @@ name: Build Android App
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
   build:
@@ -18,25 +20,26 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Set up Java
+      - name: Set up Java 21
+        # Aapka error 'source release: 21' mang raha tha, isliye yahan 21 set kiya hai
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17'
+          java-version: '21'
 
       - name: Install Dependencies
-        # 'npm install' use karein 'npm ci' ki jagah taake lockfile ka error na aaye
+        # GitHub web par 'npm install' zyada reliable hai lockfile errors se bachne ke liye
         run: |
           npm install
           npm install @capacitor/cli @capacitor/android @capacitor/core
 
       - name: Build Web Assets
-        # Capacitor ko 'dist' ya 'build' folder chahiye hota hai
+        # Capacitor ko build folder (dist/www) chahiye hota hai sync ke liye
         run: npm run build
 
       - name: Capacitor Android Sync
         run: |
-          # Agar android folder nahi hai toh add karo, warna sirf sync
+          # Agar android folder exist nahi karta toh create karega
           if [ ! -d "android" ]; then
             npx cap add android
           fi
@@ -45,6 +48,7 @@ jobs:
       - name: Build Android Release
         run: |
           cd android
+          # Execution permission dena zaroori hai runner ke liye
           chmod +x gradlew
           ./gradlew assembleRelease
 
