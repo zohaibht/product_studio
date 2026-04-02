@@ -12,7 +12,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Java version ko 21 kar diya gaya hai
+      # Java version 21
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -28,10 +28,10 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
+      # Sab se aham step: Vite ke liye VITE_ prefix lazmi hai
       - name: Create Environment File
         run: |
           echo "VITE_GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" > .env
-          echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
           
       - name: Build Web Project
         run: npm run build
