@@ -22,20 +22,21 @@ jobs:
         run: npm install
 
       - name: Build React App (Vite)
-        # Yahan GitHub Secrets se keys utha kar build process mein di ja rahi hain
+        # Vite build ke waqt secrets ko environment variables mein pass karna zaroori hai
         run: npm run build
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           API_KEY: ${{ secrets.API_KEY }}
 
-      - name: Setup Java (JDK 17)
+      - name: Setup Java (JDK 21)
+        # Java 21 naye Capacitor/Android versions ke liye lazmi hai
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17'
+          java-version: '21'
 
       - name: Setup and Sync Capacitor
-        # Is step mein CLI install karke platform setup kiya ja raha hai
+        # Is step mein hum Capacitor CLI install kar ke fresh android folder banatay hain
         run: |
           npm install @capacitor/core @capacitor/cli @capacitor/android
           rm -rf android
@@ -44,12 +45,14 @@ jobs:
           npx cap sync android
 
       - name: Build APK with Gradle
+        # Gradle ko execution permission dena aur debug APK banana
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
 
       - name: Upload APK to Artifacts
+        # Build khatam hone ke baad APK ko download ke liye available karna
         uses: actions/upload-artifact@v4
         with:
           name: Lumina-Studio-APK
