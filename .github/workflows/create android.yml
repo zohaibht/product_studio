@@ -21,13 +21,11 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22' # Version 20 ko 22 se badal dya hai
           cache: 'npm'
 
       - name: Install Dependencies
-        run: |
-          npm install
-          npm install @capacitor/core@latest @capacitor/cli@latest @capacitor/android@latest
+        run: npm install
 
       - name: Create Environment File
         run: |
