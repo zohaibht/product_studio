@@ -21,7 +21,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22' # Version 20 ko 22 se badal dya hai
+          node-version: '22'
           cache: 'npm'
 
       - name: Install Dependencies
@@ -35,11 +35,10 @@ jobs:
       - name: Build Web Project
         run: npm run build
 
-      - name: Initialize Capacitor Android
+      # Is step ko fix kiya gaya hai
+      - name: Setup Capacitor Android
         run: |
-          npx cap init "Product Studio" "com.zohaib.productstudio" --web-dir dist --force
-          npx cap add android || true
-          npx cap sync android
+          npx cap sync android || (npx cap add android && npx cap sync android)
 
       - name: Build Android Debug APK
         run: |
