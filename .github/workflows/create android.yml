@@ -2,49 +2,57 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ main ] # Jab aap code push karenge, build khud shuru ho jayegi
+    branches: [ main ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. GitHub se code fetch karna
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      # 2. Java setup (Android build ke liye lazmi hai)
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      # 3. Node.js setup
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
 
-      # 4. Dependencies install karna
       - name: Install Dependencies
         run: npm install
 
-      # 5. STEP 3: Aapki GEMINI_API_KEY ko environment mein set karna
-      # Ye command .env file banaye gi jo build ke waqt use hogi
+      # STEP 3: API Key setup
       - name: Create Environment File
         run: |
           echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" > .env
           echo "VITE_GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
 
-      # 6. Android Build Step (Debug APK)
+      # Naya Step: Agar Capacitor use kar rahe hain to android folder generate karna
+      - name: Build Web and Sync Android
+        run: |
+          npm run build --if-present
+          if [ -f "capacitor.config.json" ] || [ -f "capacitor.config.ts" ]; then
+            npx cap sync android || npx cap add android
+          fi
+
+      # STEP 6: Android Build (Check ke folder exist karta hai ya nahi)
       - name: Build Android Debug APK
         run: |
-          cd android && ./gradlew assembleDebug
+          if [ -d "android" ]; then
+            cd android && ./gradlew assembleDebug
+          else
+            echo "Error: Android folder still not found!"
+            exit 1
+          fi
 
-      # 7. STEP 4: APK ko download ke liye save karna
+      # STEP 7: Upload APK
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Gemini-App-Build
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: "**/*.apk" # Ye saari APKs dhoond lega chahay folder kahin bhi ho
