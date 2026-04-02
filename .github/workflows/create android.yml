@@ -12,10 +12,11 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      # Java version ko 21 kar diya gaya hai
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
 
       - name: Set up Node.js
@@ -35,7 +36,6 @@ jobs:
       - name: Build Web Project
         run: npm run build
 
-      # Is step ko fix kiya gaya hai
       - name: Setup Capacitor Android
         run: |
           npx cap sync android || (npx cap add android && npx cap sync android)
