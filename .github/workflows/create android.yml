@@ -25,7 +25,9 @@ jobs:
           cache: 'npm'
 
       - name: Install Dependencies
-        run: npm install
+        run: |
+          npm install
+          npm install @capacitor/core@latest @capacitor/cli@latest @capacitor/android@latest
 
       - name: Create Environment File
         run: |
@@ -37,7 +39,8 @@ jobs:
 
       - name: Initialize Capacitor Android
         run: |
-          npx cap add android
+          npx cap init "Product Studio" "com.zohaib.productstudio" --web-dir dist --force
+          npx cap add android || true
           npx cap sync android
 
       - name: Build Android Debug APK
