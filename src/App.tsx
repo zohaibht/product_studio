@@ -1,23 +1,18 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { 
-  Upload, 
   Camera, 
   Image as ImageIcon, 
-  Video, 
-  CheckCircle2, 
   Loader2, 
   AlertCircle,
-  Maximize2,
-  ChevronRight,
-  Download,
   Key,
-  RotateCcw,
   X,
-  Plus
+  Plus,
+  CheckCircle2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { GoogleGenerativeAI } from "@google/genai"; 
+// Updated Import to fix Rollup build error
+import { GoogleGenerativeAI } from "@google/generative-ai"; 
 import { cn } from './lib/utils';
 
 // --- Types ---
@@ -44,7 +39,6 @@ declare global {
 const MODELS = {
   ANALYSIS: 'gemini-1.5-flash', 
   IMAGE: 'imagen-3', 
-  VIDEO: 'veo-1', 
 };
 
 const GENERATION_PLAN: Omit<GeneratedItem, 'id' | 'status'>[] = [
@@ -81,13 +75,12 @@ const withRetry = async <T,>(
 
 export default function App() {
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
-  const [productDescription, setProductDescription] = useState<string>('');
   const [items, setItems] = useState<GeneratedItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [hasApiKey, setHasApiKey] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Robust API Key retrieval
+  // Environment-aware API Key retrieval
   const getApiKey = () => {
     return (
       import.meta.env.VITE_GEMINI_API_KEY || 
@@ -152,22 +145,21 @@ export default function App() {
     setItems(initialItems);
 
     try {
-      // 1. Initialize Gemini
+      // 1. Initialize Gemini SDK
       const genAI = new GoogleGenerativeAI(apiKey);
       
       const imageParts = uploadedImages.map(img => ({
         inlineData: { data: img.split(',')[1], mimeType: "image/png" }
       }));
 
-      // 2. Analyze Product
-      const model = genAI.getGenerativeModel({ model: MODELS.ANALYSIS });
-      const result = await withRetry(() => model.generateContent([
+      // 2. Analyze Product (Vision Task)
+      const analysisModel = genAI.getGenerativeModel({ model: MODELS.ANALYSIS });
+      const analysisResult = await withRetry(() => analysisModel.generateContent([
         "Analyze these images. Describe the product in detail for an AI generator. Focus on shape, texture, and materials. Be concise.",
         ...imageParts
       ]));
 
-      const description = result.response.text();
-      setProductDescription(description);
+      const description = analysisResult.response.text();
 
       // 3. Generate individual items from plan
       for (let i = 0; i < initialItems.length; i++) {
@@ -179,13 +171,13 @@ export default function App() {
           const item = initialItems[i];
           const finalPrompt = item.prompt.replace('[PRODUCT]', description);
           
+          // Image Generation Step
           const imageModel = genAI.getGenerativeModel({ model: MODELS.IMAGE });
           const genResult = await withRetry(() => imageModel.generateContent([
             finalPrompt,
             ...imageParts
           ]));
 
-          // Note: Image extraction depends on model response format
           const candidate = genResult.response.candidates?.[0];
           const inlineData = candidate?.content.parts.find(p => p.inlineData)?.inlineData;
 
@@ -195,8 +187,7 @@ export default function App() {
               idx === i ? { ...it, status: 'completed', url: generatedUrl } : it
             ));
           } else {
-            // Fallback for demo if model doesn't return image (e.g. Free Tier)
-            throw new Error("No image data returned");
+            throw new Error("No image data returned from model.");
           }
 
         } catch (err) {
@@ -215,7 +206,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50 text-neutral-900 font-sans">
+    <div className="min-h-screen bg-neutral-50 text-neutral-900 font-sans selection:bg-neutral-900 selection:text-white">
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-neutral-200">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -239,7 +230,7 @@ export default function App() {
 
       <main className="max-w-7xl mx-auto px-4 py-12">
         <div className="grid lg:grid-cols-12 gap-12">
-          {/* Left Column: Upload & Controls */}
+          {/* Left Column */}
           <div className="lg:col-span-4 space-y-8">
             <section className="space-y-4">
               <h2 className="text-2xl font-bold tracking-tight">Source Product</h2>
@@ -247,10 +238,10 @@ export default function App() {
                 <AnimatePresence>
                   {uploadedImages.map((img, idx) => (
                     <motion.div 
+                      key={idx} 
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.9 }}
-                      key={idx} 
                       className="relative aspect-square rounded-xl border overflow-hidden bg-white group shadow-sm"
                     >
                       <img src={img} className="w-full h-full object-contain p-2" />
@@ -270,11 +261,10 @@ export default function App() {
                   )}>
                     <input {...getInputProps()} />
                     <Plus className="w-6 h-6 text-neutral-400" />
-                    <span className="text-[10px] text-neutral-400 mt-1 uppercase font-bold">Add Photo</span>
+                    <span className="text-[10px] text-neutral-400 mt-1 uppercase font-bold tracking-wider">Add Image</span>
                   </div>
                 )}
               </div>
-
               <button
                 onClick={startGeneration}
                 disabled={uploadedImages.length === 0 || isProcessing}
@@ -285,37 +275,25 @@ export default function App() {
                     : "bg-neutral-900 text-white hover:bg-black active:scale-[0.98]"
                 )}
               >
-                {isProcessing ? (
-                  <>
-                    <Loader2 className="animate-spin w-5 h-5" />
-                    Processing...
-                  </>
-                ) : "Generate Photography"}
+                {isProcessing ? <Loader2 className="animate-spin w-5 h-5" /> : "Generate Photography"}
               </button>
-
               {error && (
-                <div className="p-4 bg-red-50 text-red-600 rounded-xl flex gap-2 text-sm border border-red-100">
+                <div className="p-4 bg-red-50 text-red-600 rounded-xl flex gap-2 text-sm border border-red-100 items-start">
                   <AlertCircle className="w-5 h-5 shrink-0" />
-                  {error}
+                  <span>{error}</span>
                 </div>
               )}
             </section>
           </div>
 
-          {/* Right Column: Gallery */}
+          {/* Right Column */}
           <div className="lg:col-span-8">
-            <div className="flex items-center justify-between mb-8">
-              <h2 className="text-2xl font-bold">Studio Gallery</h2>
-              <span className="text-sm text-neutral-500 font-medium">
-                {items.filter(i => i.status === 'completed').length} / {items.length} Ready
-              </span>
-            </div>
-
+            <h2 className="text-2xl font-bold mb-8">Studio Gallery</h2>
             <div className="grid sm:grid-cols-2 gap-6">
               {items.length === 0 ? (
-                <div className="col-span-full h-64 border-2 border-dashed border-neutral-200 rounded-3xl flex flex-col items-center justify-center text-neutral-400">
+                <div className="col-span-full h-64 border-2 border-dashed border-neutral-200 rounded-3xl flex flex-col items-center justify-center text-neutral-300">
                   <ImageIcon className="w-12 h-12 mb-2 opacity-20" />
-                  <p>Upload images to start generation</p>
+                  <p className="font-medium">Gallery is empty</p>
                 </div>
               ) : (
                 items.map((item) => (
@@ -328,38 +306,28 @@ export default function App() {
                       {item.status === 'processing' && (
                         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm">
                           <Loader2 className="animate-spin text-neutral-900 w-8 h-8 mb-2" />
-                          <span className="text-xs font-bold uppercase tracking-widest text-neutral-500">Creating</span>
+                          <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Rendering</span>
                         </div>
                       )}
-                      
-                      {item.status === 'error' && (
-                        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-red-50">
-                          <AlertCircle className="text-red-400 w-8 h-8 mb-2" />
-                          <span className="text-xs font-bold text-red-400">Failed to Generate</span>
-                        </div>
-                      )}
-
                       {item.url ? (
-                        <img src={item.url} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt={item.title} />
+                        <img src={item.url} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" alt={item.title} />
                       ) : (
                         <ImageIcon className="w-12 h-12 text-neutral-200" />
                       )}
-
                       {item.status === 'completed' && (
                         <div className="absolute top-4 right-4">
                           <CheckCircle2 className="w-6 h-6 text-green-500 fill-white" />
                         </div>
                       )}
+                      {item.status === 'error' && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-50/50">
+                          <AlertCircle className="w-8 h-8 text-red-400" />
+                        </div>
+                      )}
                     </div>
-                    
                     <div className="p-6">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[10px] font-black uppercase tracking-tighter px-2 py-0.5 bg-neutral-100 rounded text-neutral-500">
-                          {item.type}
-                        </span>
-                        <h3 className="font-bold text-neutral-900">{item.title}</h3>
-                      </div>
-                      <p className="text-sm text-neutral-500 leading-relaxed">{item.description}</p>
+                      <h3 className="font-bold text-neutral-900">{item.title}</h3>
+                      <p className="text-sm text-neutral-500">{item.description}</p>
                     </div>
                   </motion.div>
                 ))
