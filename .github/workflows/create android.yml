@@ -32,7 +32,7 @@ jobs:
         run: |
           echo "VITE_GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" > .env
           echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
-
+          
       - name: Build Web Project
         run: npm run build
 
