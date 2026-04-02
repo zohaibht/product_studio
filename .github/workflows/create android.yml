@@ -3,8 +3,6 @@ name: Build Android App
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
 
 jobs:
   build:
@@ -27,18 +25,18 @@ jobs:
           java-version: '17'
 
       - name: Install Dependencies
+        # 'npm install' use karein 'npm ci' ki jagah taake lockfile ka error na aaye
         run: |
-          npm ci
-          # Explicitly ensure Capacitor packages are present
+          npm install
           npm install @capacitor/cli @capacitor/android @capacitor/core
 
       - name: Build Web Assets
-        # This creates the 'dist' or 'build' folder Capacitor needs
+        # Capacitor ko 'dist' ya 'build' folder chahiye hota hai
         run: npm run build
 
       - name: Capacitor Android Sync
         run: |
-          # If the android folder doesn't exist, add it. Then sync.
+          # Agar android folder nahi hai toh add karo, warna sirf sync
           if [ ! -d "android" ]; then
             npx cap add android
           fi
