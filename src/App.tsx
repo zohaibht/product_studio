@@ -164,9 +164,12 @@ export default function App() {
     try {
       // Create AI instance with the most up-to-date key
       // Use API_KEY if available (selected via dialog), otherwise fallback to GEMINI_API_KEY
-      const currentApiKey = (process.env.API_KEY || process.env.GEMINI_API_KEY) as string;
+      const currentApiKey = import.meta.env.VITE_GEMINI_API_KEY;
       const ai = new GoogleGenAI({ apiKey: currentApiKey });
-      
+
+      // Purana tariqa (Nahi chalega APK mein):
+      // const currentApiKey = (process.env.API_KEY || process.env.GEMINI_API_KEY) as string;
+      
       const imageParts = uploadedImages.map(img => ({
         inlineData: { data: img.split(',')[1], mimeType: "image/png" }
       }));
