@@ -21,38 +21,38 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18'
+          node-version: '20' # Thora latest version use karte hain
+          cache: 'npm'       # Cache enable karne se speed barhti hai
 
+      # Purani node_modules aur lock file ka jhanjhat khatam karne ke liye
       - name: Install Dependencies
-        run: npm install
+        run: |
+          npm install -g npm@latest
+          npm ci || npm install # npm ci fast aur clean hota hai
 
-      # STEP 3: API Key setup
       - name: Create Environment File
         run: |
           echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" > .env
           echo "VITE_GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
 
-      # Naya Step: Agar Capacitor use kar rahe hain to android folder generate karna
-      - name: Build Web and Sync Android
-        run: |
-          npm run build --if-present
-          if [ -f "capacitor.config.json" ] || [ -f "capacitor.config.ts" ]; then
-            npx cap sync android || npx cap add android
-          fi
+      # Tailwind/Vite error ko bypass karne ke liye build step
+      - name: Build Web
+        run: npm run build --if-present
 
-      # STEP 6: Android Build (Check ke folder exist karta hai ya nahi)
+      # Android check aur build
       - name: Build Android Debug APK
         run: |
           if [ -d "android" ]; then
             cd android && ./gradlew assembleDebug
           else
-            echo "Error: Android folder still not found!"
-            exit 1
+            # Agar capacitor use kar rahe hain to pehle android folder banayein
+            npx cap add android || true
+            npx cap sync android || true
+            cd android && ./gradlew assembleDebug
           fi
 
-      # STEP 7: Upload APK
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Gemini-App-Build
-          path: "**/*.apk" # Ye saari APKs dhoond lega chahay folder kahin bhi ho
+          path: "**/*.apk"
