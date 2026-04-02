@@ -1,4 +1,4 @@
-name: Android Build
+name: Build Android APK
 
 on:
   push:
@@ -9,46 +9,48 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '20'
           cache: 'npm'
 
-      - name: Install Dependencies
+      - name: Install Project Dependencies
         run: npm install
 
-      - name: Build React App
-        # Yahan hum GitHub Secrets se Gemini Key utha kar build mein dal rahe hain
+      - name: Build React App (Vite)
+        # Yahan GitHub Secrets se keys utha kar build process mein di ja rahi hain
         run: npm run build
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           API_KEY: ${{ secrets.API_KEY }}
 
-      - name: Initialize and Sync Capacitor
-        # "--confirm" hata diya gaya hai taake build fail na ho
-        run: |
-          npx cap init Lumina com.lumina.app
-          npx cap add android || echo "Android platform already exists"
-          npx cap sync android
-
-      - name: Set up JDK 17
+      - name: Setup Java (JDK 17)
         uses: actions/setup-java@v4
         with:
+          distribution: 'zulu'
           java-version: '17'
-          distribution: 'temurin'
 
-      - name: Build Android APK
+      - name: Setup and Sync Capacitor
+        # Is step mein CLI install karke platform setup kiya ja raha hai
+        run: |
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+          rm -rf android
+          npx cap init Lumina com.lumina.app --web-dir dist
+          npx cap add android
+          npx cap sync android
+
+      - name: Build APK with Gradle
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Upload APK Artifact
+      - name: Upload APK to Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
+          name: Lumina-Studio-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
