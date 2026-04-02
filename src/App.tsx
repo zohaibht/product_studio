@@ -17,7 +17,7 @@ import {
   Plus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { GoogleGenAI } from "@google/genai"; // Updated import to match standard usage
+import { GoogleGenerativeAI } from "@google/genai"; 
 import { cn } from './lib/utils';
 
 // --- Types ---
@@ -42,18 +42,16 @@ declare global {
 
 // --- Constants ---
 const MODELS = {
-  ANALYSIS: 'gemini-1.5-flash', // Standard stable model
-  IMAGE: 'imagen-3', // Typical name for image gen
+  ANALYSIS: 'gemini-1.5-flash', 
+  IMAGE: 'imagen-3', 
   VIDEO: 'veo-1', 
 };
 
 const GENERATION_PLAN: Omit<GeneratedItem, 'id' | 'status'>[] = [
-  { title: 'Angle 1', description: 'Professional studio shot from a front-side angle.', type: 'image', prompt: 'Professional studio product photograph of [PRODUCT] from a front-side 45-degree angle, clean white background, soft shadows, studio lighting, high resolution, 4k.' },
-  { title: 'Angle 2', description: 'Professional studio shot from a side angle.', type: 'image', prompt: 'Professional studio product photograph of [PRODUCT] from a side profile angle, clean white background, soft shadows, studio lighting, high resolution, 4k.' },
-  { title: 'Angle 3', description: 'Professional studio shot from a top-down angle.', type: 'image', prompt: 'Professional studio product photograph of [PRODUCT] from a high top-down angle, clean white background, soft shadows, studio lighting, high resolution, 4k.' },
-  { title: 'Closeup 1', description: 'Macro shot showing fine texture and details.', type: 'image', prompt: 'Professional macro closeup photograph of [PRODUCT] showing fine texture and intricate details, clean white background, studio lighting, high resolution.' },
-  { title: 'Title Photo', description: 'Product placed on a grey circle background.', type: 'image', prompt: 'A professional title photograph of [PRODUCT] placed on a small subtle grey circle on a clean white background. The product is significantly larger than the circle. Soft shadows, studio lighting, high resolution.' },
-  { title: 'Product Video', description: 'A cinematic 360-degree rotation video.', type: 'video', prompt: 'A slow cinematic 360-degree rotation of [PRODUCT] on a clean white background, soft studio lighting, high resolution, smooth motion.' },
+  { title: 'Front Angle', description: 'Professional studio shot from 45-degree angle.', type: 'image', prompt: 'Professional studio product photograph of [PRODUCT] from a front-side 45-degree angle, clean white background, soft shadows, studio lighting, high resolution, 4k.' },
+  { title: 'Side Profile', description: 'Clean side angle for dimensions.', type: 'image', prompt: 'Professional studio product photograph of [PRODUCT] from a side profile angle, clean white background, soft shadows, studio lighting, high resolution, 4k.' },
+  { title: 'Macro Detail', description: 'Extreme closeup of textures.', type: 'image', prompt: 'Professional macro closeup photograph of [PRODUCT] showing fine texture and intricate details, clean white background, studio lighting, high resolution.' },
+  { title: 'Minimalist Title', description: 'Product on a subtle grey circle.', type: 'image', prompt: 'A professional title photograph of [PRODUCT] placed on a small subtle grey circle on a clean white background. Soft shadows, high resolution.' },
 ];
 
 // --- Helper for Retries ---
@@ -71,11 +69,9 @@ const withRetry = async <T,>(
       const isRetryable = 
         err.message?.includes("503") || 
         err.message?.includes("high demand") ||
-        err.message?.includes("overloaded") ||
         err.status === "UNAVAILABLE";
 
       if (!isRetryable || i === maxRetries - 1) throw err;
-      
       const delay = initialDelay * Math.pow(2, i);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
@@ -91,12 +87,11 @@ export default function App() {
   const [hasApiKey, setHasApiKey] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Get API Key from various possible sources
+  // Robust API Key retrieval
   const getApiKey = () => {
     return (
       import.meta.env.VITE_GEMINI_API_KEY || 
-      process.env.GEMINI_API_KEY || 
-      process.env.API_KEY || 
+      (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : "") ||
       ""
     );
   };
@@ -141,7 +136,10 @@ export default function App() {
 
   const startGeneration = async () => {
     const apiKey = getApiKey();
-    if (uploadedImages.length === 0 || (!apiKey && !window.aistudio)) return;
+    if (uploadedImages.length === 0 || (!apiKey && !window.aistudio)) {
+      setError("Please ensure API key is configured.");
+      return;
+    }
 
     setIsProcessing(true);
     setError(null);
@@ -154,38 +152,62 @@ export default function App() {
     setItems(initialItems);
 
     try {
-      const genAI = new GoogleGenAI(apiKey);
+      // 1. Initialize Gemini
+      const genAI = new GoogleGenerativeAI(apiKey);
       
       const imageParts = uploadedImages.map(img => ({
         inlineData: { data: img.split(',')[1], mimeType: "image/png" }
       }));
 
-      // Step 1: Analyze
+      // 2. Analyze Product
       const model = genAI.getGenerativeModel({ model: MODELS.ANALYSIS });
       const result = await withRetry(() => model.generateContent([
-        "Analyze these images. Describe the product in detail for an AI generator. Focus on shape, texture, and materials.",
+        "Analyze these images. Describe the product in detail for an AI generator. Focus on shape, texture, and materials. Be concise.",
         ...imageParts
       ]));
 
       const description = result.response.text();
       setProductDescription(description);
 
-      // Step 2: Generate Items (Simplified for demonstration)
+      // 3. Generate individual items from plan
       for (let i = 0; i < initialItems.length; i++) {
         setItems(prev => prev.map((item, idx) => 
           idx === i ? { ...item, status: 'processing' } : item
         ));
 
-        // Logic for Image/Video Generation goes here following the same API Key pattern
-        // For brevity, using a timeout to simulate
-        await new Promise(r => setTimeout(r, 2000));
-        
-        setItems(prev => prev.map((item, idx) => 
-          idx === i ? { ...item, status: 'completed', url: uploadedImages[0] } : item
-        ));
+        try {
+          const item = initialItems[i];
+          const finalPrompt = item.prompt.replace('[PRODUCT]', description);
+          
+          const imageModel = genAI.getGenerativeModel({ model: MODELS.IMAGE });
+          const genResult = await withRetry(() => imageModel.generateContent([
+            finalPrompt,
+            ...imageParts
+          ]));
+
+          // Note: Image extraction depends on model response format
+          const candidate = genResult.response.candidates?.[0];
+          const inlineData = candidate?.content.parts.find(p => p.inlineData)?.inlineData;
+
+          if (inlineData) {
+            const generatedUrl = `data:image/png;base64,${inlineData.data}`;
+            setItems(prev => prev.map((it, idx) => 
+              idx === i ? { ...it, status: 'completed', url: generatedUrl } : it
+            ));
+          } else {
+            // Fallback for demo if model doesn't return image (e.g. Free Tier)
+            throw new Error("No image data returned");
+          }
+
+        } catch (err) {
+          console.error(`Item ${i} failed:`, err);
+          setItems(prev => prev.map((it, idx) => 
+            idx === i ? { ...it, status: 'error' } : it
+          ));
+        }
       }
     } catch (err: any) {
-      setError("Generation failed. Please check your API key and connection.");
+      setError("Analysis failed. Check your API key connection and quota.");
       console.error(err);
     } finally {
       setIsProcessing(false);
@@ -193,7 +215,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50 text-neutral-900 font-sans selection:bg-neutral-900 selection:text-white">
+    <div className="min-h-screen bg-neutral-50 text-neutral-900 font-sans">
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-neutral-200">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -217,53 +239,131 @@ export default function App() {
 
       <main className="max-w-7xl mx-auto px-4 py-12">
         <div className="grid lg:grid-cols-12 gap-12">
-          {/* Left Column */}
+          {/* Left Column: Upload & Controls */}
           <div className="lg:col-span-4 space-y-8">
             <section className="space-y-4">
               <h2 className="text-2xl font-bold tracking-tight">Source Product</h2>
               <div className="grid grid-cols-2 gap-4">
                 <AnimatePresence>
                   {uploadedImages.map((img, idx) => (
-                    <motion.div key={idx} className="relative aspect-square rounded-xl border overflow-hidden bg-white group">
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      key={idx} 
+                      className="relative aspect-square rounded-xl border overflow-hidden bg-white group shadow-sm"
+                    >
                       <img src={img} className="w-full h-full object-contain p-2" />
-                      <button onClick={() => removeImage(idx)} className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><X className="w-3 h-3" /></button>
+                      <button 
+                        onClick={() => removeImage(idx)} 
+                        className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
                     </motion.div>
                   ))}
                 </AnimatePresence>
                 {uploadedImages.length < 5 && (
-                  <div {...getRootProps()} className={cn("relative aspect-square rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer", isDragActive ? "bg-neutral-100" : "bg-white")}>
+                  <div {...getRootProps()} className={cn(
+                    "relative aspect-square rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-colors",
+                    isDragActive ? "bg-neutral-100 border-neutral-400" : "bg-white border-neutral-200 hover:border-neutral-300"
+                  )}>
                     <input {...getInputProps()} />
                     <Plus className="w-6 h-6 text-neutral-400" />
+                    <span className="text-[10px] text-neutral-400 mt-1 uppercase font-bold">Add Photo</span>
                   </div>
                 )}
               </div>
+
               <button
                 onClick={startGeneration}
                 disabled={uploadedImages.length === 0 || isProcessing}
-                className={cn("w-full py-4 rounded-xl font-bold text-lg transition-all", (uploadedImages.length === 0 || isProcessing) ? "bg-neutral-200" : "bg-neutral-900 text-white")}
+                className={cn(
+                  "w-full py-4 rounded-xl font-bold text-lg transition-all flex items-center justify-center gap-2",
+                  (uploadedImages.length === 0 || isProcessing) 
+                    ? "bg-neutral-200 text-neutral-400 cursor-not-allowed" 
+                    : "bg-neutral-900 text-white hover:bg-black active:scale-[0.98]"
+                )}
               >
-                {isProcessing ? <Loader2 className="animate-spin mx-auto" /> : "Generate Photography"}
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="animate-spin w-5 h-5" />
+                    Processing...
+                  </>
+                ) : "Generate Photography"}
               </button>
-              {error && <div className="p-4 bg-red-50 text-red-600 rounded-xl flex gap-2"><AlertCircle /> {error}</div>}
+
+              {error && (
+                <div className="p-4 bg-red-50 text-red-600 rounded-xl flex gap-2 text-sm border border-red-100">
+                  <AlertCircle className="w-5 h-5 shrink-0" />
+                  {error}
+                </div>
+              )}
             </section>
           </div>
 
-          {/* Right Column */}
+          {/* Right Column: Gallery */}
           <div className="lg:col-span-8">
-            <h2 className="text-2xl font-bold mb-8">Studio Gallery</h2>
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-2xl font-bold">Studio Gallery</h2>
+              <span className="text-sm text-neutral-500 font-medium">
+                {items.filter(i => i.status === 'completed').length} / {items.length} Ready
+              </span>
+            </div>
+
             <div className="grid sm:grid-cols-2 gap-6">
-              {items.map((item) => (
-                <div key={item.id} className="bg-white rounded-3xl border border-neutral-200 overflow-hidden group">
-                  <div className="aspect-square relative bg-neutral-100">
-                    {item.status === 'processing' && <div className="absolute inset-0 flex items-center justify-center bg-white/60"><Loader2 className="animate-spin" /></div>}
-                    {item.url && <img src={item.url} className="w-full h-full object-cover" />}
-                  </div>
-                  <div className="p-6">
-                    <h3 className="font-bold">{item.title}</h3>
-                    <p className="text-sm text-neutral-500">{item.description}</p>
-                  </div>
+              {items.length === 0 ? (
+                <div className="col-span-full h-64 border-2 border-dashed border-neutral-200 rounded-3xl flex flex-col items-center justify-center text-neutral-400">
+                  <ImageIcon className="w-12 h-12 mb-2 opacity-20" />
+                  <p>Upload images to start generation</p>
                 </div>
-              ))}
+              ) : (
+                items.map((item) => (
+                  <motion.div 
+                    layout
+                    key={item.id} 
+                    className="bg-white rounded-3xl border border-neutral-200 overflow-hidden group shadow-sm hover:shadow-md transition-shadow"
+                  >
+                    <div className="aspect-square relative bg-neutral-100 flex items-center justify-center">
+                      {item.status === 'processing' && (
+                        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm">
+                          <Loader2 className="animate-spin text-neutral-900 w-8 h-8 mb-2" />
+                          <span className="text-xs font-bold uppercase tracking-widest text-neutral-500">Creating</span>
+                        </div>
+                      )}
+                      
+                      {item.status === 'error' && (
+                        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-red-50">
+                          <AlertCircle className="text-red-400 w-8 h-8 mb-2" />
+                          <span className="text-xs font-bold text-red-400">Failed to Generate</span>
+                        </div>
+                      )}
+
+                      {item.url ? (
+                        <img src={item.url} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt={item.title} />
+                      ) : (
+                        <ImageIcon className="w-12 h-12 text-neutral-200" />
+                      )}
+
+                      {item.status === 'completed' && (
+                        <div className="absolute top-4 right-4">
+                          <CheckCircle2 className="w-6 h-6 text-green-500 fill-white" />
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="p-6">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[10px] font-black uppercase tracking-tighter px-2 py-0.5 bg-neutral-100 rounded text-neutral-500">
+                          {item.type}
+                        </span>
+                        <h3 className="font-bold text-neutral-900">{item.title}</h3>
+                      </div>
+                      <p className="text-sm text-neutral-500 leading-relaxed">{item.description}</p>
+                    </div>
+                  </motion.div>
+                ))
+              )}
             </div>
           </div>
         </div>
